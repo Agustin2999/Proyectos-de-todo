@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comparador de rostros</title>
+
+  <link rel="stylesheet" href="./stylesDeteccion.css" type="text/css">
+
+  <!-- Estilos materialize -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <!-- Compiled and minified JavaScript -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <!-- iconos -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+
+  <!-- api comparador -->
+  <script src="https://unpkg.com/@vladmandic/face-api/dist/face-api.js"></script>
+
+
+
+  <script>
+
+    // Función asincrónica para cargar los modelos
+    async function cargarModelos() {
+      await faceapi.nets.ssdMobilenetv1.loadFromUri('./models'); //se cambio /models para que lea bien la raiz el hosting
+      await faceapi.nets.faceLandmark68Net.loadFromUri('./models');
+      await faceapi.nets.faceRecognitionNet.loadFromUri('./models');
+    }
+
+
+    function compararRostros() {
+
+      var loader = document.getElementById("loader");
+      loader.style.display = "block";
+
+
+      // Llamar a la función para cargar los modelos
+      cargarModelos().then(async () => {
+
+        // Obtener las referencias a los elementos canvas
+        const canvasA = document.getElementById('canvas-A');
+        const canvasB = document.getElementById('canvas-B');
+
+        // Cargar las imágenes de rostro A y rostro B
+        const imgRostroA = document.getElementById('img-A');
+        const imgRostroB = document.getElementById('img-B');
+
+        // Detectar rostros en las imágenes
+        const detectionsRostroA = await faceapi.detectAllFaces(imgRostroA).withFaceLandmarks().withFaceDescriptors();
+        const detectionsRostroB = await faceapi.detectAllFaces(imgRostroB).withFaceLandmarks().withFaceDescriptors();
+
+        // Dibujar el marcado del rostro en el canvas
+        faceapi.matchDimensions(canvasA, imgRostroA);
+        faceapi.draw.drawDetections(canvasA, detectionsRostroA);
+
+        faceapi.matchDimensions(canvasB, imgRostroB);
+        faceapi.draw.drawDetections(canvasB, detectionsRostroB);
+
+        // Comparar los rostros
+        const faceMatcher = new faceapi.FaceMatcher(detectionsRostroA);
+        let results = detectionsRostroB.map((detection) => faceMatcher.findBestMatch(detection.descriptor));
+
+
+
+
+
+        // Umbral de similitud (puedes ajustar este valor según tus necesidades)
+        const umbralSimilitud = 0.5;
+
+
+
+        // Comparar los rostros y determinar si son parecidos
+        results = detectionsRostroB.map((detection) => {
+          const match = faceMatcher.findBestMatch(detection.descriptor);
+          const distancia = match.distance;
+          const esParecido = distancia < umbralSimilitud;
+          return {
+            rostro: match.label,
+            distancia: distancia,
+            esParecido: esParecido
+          };
+        });
+
+        // Mostrar los resultados
+        let porcentajeCoincidencia = " ";
+        let esMismaPersona = "";
+
+        results.forEach((result) => {
+          console.log(`Rostro: ${result.rostro}, Distancia: ${result.distancia}, ¿Es parecido?: ${result.esParecido}`);
+          porcentajeCoincidencia = (100 - (result.distancia * 100)).toFixed(2);
+          esMismaPersona = result.esParecido == true ? "SI" : "NO";
+
+          let cercania = porcentajeCoincidencia / (umbralSimilitud * 100) * 100;
+
+          document.getElementById("lblcercania").textContent = "Para que haya coincidencia estuvo a: " + cercania.toFixed(2) + "% (con un umbral fijo de coincidencia de: " + umbralSimilitud * 100 + "%)"
+
+        });
+
+
+        let lblPorcentajeCoincidencia = "Tienen un " + porcentajeCoincidencia + "% de coincidencia ambas fotos";
+        let lblEsMismaPersona = " Son la misma persona? ";//+ esMismaPersona;
+        document.querySelector('#lblPorcentajeCoincidencia').textContent = lblPorcentajeCoincidencia;
+        document.querySelector('#lblEsMismaPersona').textContent = lblEsMismaPersona;
+
+
+
+        let mismaPersona_rdoNeg = document.querySelector('#mismaPersona-rdoNeg')
+        let imgResultadoNeg = document.querySelector('#imgResultadoNeg')
+
+        let mismaPersona_rdoPos = document.querySelector('#mismaPersona-rdoPos')
+        let imgResultadoPos = document.querySelector('#imgResultadoPos')
+
+        if (esMismaPersona.toLowerCase() == "si") {
+
+          document.getElementById("lblcercania").textContent = ""
+
+
+          //ds-nn es display none
+
+          //agregamos/eliminamos clases para que desaparezcan los 'no'
+          mismaPersona_rdoNeg.classList.remove('ds-il');
+          mismaPersona_rdoNeg.classList.add('ds-nn')
+          imgResultadoNeg.classList.remove('ds-bl')
+          imgResultadoNeg.classList.add('ds-nn')
+
+          //agregamos/eliminamos clases para que aparezcan los 'si'
+          mismaPersona_rdoPos.classList.add('ds-il');
+          mismaPersona_rdoPos.classList.remove('ds-nn')
+          imgResultadoPos.classList.add('ds-bl')
+          imgResultadoPos.classList.remove('ds-nn')
+
+        } else { //no es la misma persona
+
+
+          //agregamos/eliminamos clases para que desaparezcan los 'si'
+          mismaPersona_rdoPos.classList.remove('ds-il');
+          mismaPersona_rdoPos.classList.add('ds-nn')
+          imgResultadoPos.classList.remove('ds-bl')
+          imgResultadoPos.classList.add('ds-nn')
+
+          //agregamos/eliminamos clases para que aparezcan los 'no'
+          mismaPersona_rdoNeg.classList.add('ds-il');
+          mismaPersona_rdoNeg.classList.remove('ds-nn')
+          imgResultadoNeg.classList.add('ds-bl')
+          imgResultadoNeg.classList.remove('ds-nn')
+        }
+
+      }).then(() => {
+        loader.style.display = "none";
+      }
+      );
+
+    }
+    // umbralSimilitud: Un valor más bajo indica una mayor similitud requerida para considerar los rostros como parecidos, mientras que un valor más alto es más restrictivo.
+
+
+
+
+    function seleccionarImagen(whichImage) {
+      // Boton cargar imagen. whichImage es para detectar si es imagenA o imagenB
+
+      limpiar(limpiarSoloResultado = true) // para que limpie solo resultado, porque si no se van a borrar las imagenes cargadas
+
+
+      let input;
+      let imagenMostrada;
+
+
+      if (whichImage == 'img-A') {
+        input = document.getElementById('inp-img-A');
+        imagenMostrada = document.getElementById('img-A');
+      }
+      if (whichImage == 'img-B') {
+        input = document.getElementById('inp-img-B');
+        imagenMostrada = document.getElementById('img-B');
+      }
+
+
+
+
+      input.onchange = function (e) {
+
+        if (whichImage == 'img-A') {
+          document.querySelector('#img-A').classList.remove("visHidden");
+          document.querySelector('#img-A').classList.add("tieneAlgo")
+        }
+        if (whichImage == 'img-B') {
+          document.querySelector('#img-B').classList.remove("visHidden")
+          document.querySelector('#img-B').classList.add("tieneAlgo")
+        }
+
+
+
+        const archivo = e.target.files[0];
+        const lector = new FileReader();
+
+        lector.onload = function (evento) {
+
+          imagenMostrada.onload = function () {
+            // Se asegura de que las dimensiones estén disponibles
+            console.log('Ancho:', imagenMostrada.width);
+            console.log('Alto:', imagenMostrada.height);
+            imagenMostrada.style.display = 'inline';
+          };
+
+          imagenMostrada.src = evento.target.result;
+
+
+          const img1 = document.getElementById('img-B');
+          const img2 = document.getElementById('img-A');
+          const btnComparar = document.getElementById('btnComparar');
+
+          // Para verificar si ambos inputs de imágenes tienen contenido
+          if (img1.classList.contains("tieneAlgo") && img2.classList.contains("tieneAlgo")
+            && img1.src != "" && img2.src != "") {
+            // Habilitar el botón "ejecutar" si ambos inputs tienen imágenes
+            btnComparar.disabled = false;
+          } else {
+            // Deshabilitar el botón "ejecutar" si falta al menos una imagen
+            btnComparar.disabled = true;
+          }
+
+        };
+
+        lector.readAsDataURL(archivo);
+      };
+
+      input.click();
+
+
+    }
+
+
+
+
+    function limpiar(limpiarSoloResultado = false) {
+
+      if (!limpiarSoloResultado) {
+        const img1 = document.getElementById('img-B');
+        const img2 = document.getElementById('img-A');
+        img1.src = "";
+        img2.src = "";
+        img1.classList.add('visHidden')
+        img2.classList.add('visHidden')
+
+
+        const btnComparar = document.getElementById('btnComparar');
+        btnComparar.disabled = true;
+
+      }
+
+
+
+
+      // Reiniciamos labels (lbl)
+
+      const lblEsMismaPersona = document.getElementById('lblEsMismaPersona');
+      lblEsMismaPersona.textContent = "";
+
+      const lblPorcentajeCoincidencia = document.getElementById('lblPorcentajeCoincidencia');
+      lblPorcentajeCoincidencia.textContent = "Cargue las imagenes y haga click en comparar";
+
+      document.getElementById("lblcercania").textContent = ""
+
+
+
+      //Si/No de colores, e imagenes '+' y 'x'
+      let mismaPersona_rdoNeg = document.querySelector('#mismaPersona-rdoNeg')
+      let imgResultadoNeg = document.querySelector('#imgResultadoNeg')
+
+      let mismaPersona_rdoPos = document.querySelector('#mismaPersona-rdoPos')
+      let imgResultadoPos = document.querySelector('#imgResultadoPos')
+
+
+      //ds-nn es display none
+
+      //agregamos/eliminamos clases para que desaparezcan los 'no'
+      mismaPersona_rdoNeg.classList.remove('ds-il');
+      mismaPersona_rdoNeg.classList.add('ds-nn')
+      imgResultadoNeg.classList.remove('ds-bl')
+      imgResultadoNeg.classList.add('ds-nn')
+
+      //agregamos/eliminamos clases para que desaparezcan los 'si'
+      mismaPersona_rdoPos.classList.remove('ds-il');
+      mismaPersona_rdoPos.classList.add('ds-nn')
+      imgResultadoPos.classList.remove('ds-bl')
+      imgResultadoPos.classList.add('ds-nn')
+    }
+
+  </script>
+</head>
+
+<body>
+
+
+  <div id="divBody">
+
+    <div class="divTitle">
+      <p class="ds-il textoTitle">¿Es la misma persona? Comprobalo!</p>
+      <p>(comparador de imagenes)</p>
+      <img class="imgTitle" src="https://i.gifer.com/9vo9.gif">
+    </div>
+
+    <div id="divContenedorMain">
+
+      <div class="div-img-A">
+
+        <p>Imagen A</p> <!--IMAGEN PED-->
+        <div>
+
+          <a onclick="seleccionarImagen('img-A')" class="btnCargarImagen waves-effect waves-light btn">
+            <i class="material-icons left">upload</i>
+            Cargar imagen
+          </a>
+        </div>
+
+        <div class="divImgCanvas">
+          <input type="file" id="inp-img-A" accept="image/*" class="ds-nn">
+          <img id="img-A" class="foto visHidden" src="" alt="Imagen A">
+          <canvas id="canvas-A" class="canvas-AB"></canvas>
+        </div>
+      </div>
+
+
+      <div class="div-img-B">
+        <p>Imagen B</p> <!--IMAGEN PAB-->
+        <div>
+
+          <a onclick="seleccionarImagen('img-B')" class="btnCargarImagen waves-effect waves-light btn">
+            <i class="material-icons left">upload</i>
+            Cargar imagen
+          </a>
+        </div>
+
+        <div class="divImgCanvas">
+          <input type="file" id="inp-img-B" accept="image/*" class="ds-nn">
+          <img id="img-B" class="foto visHidden " src="" alt="Imagen B">
+          <canvas id="canvas-B" class="canvas-AB"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+
+
+
+    <!-- Loader -->
+    <div id="loader" class="ds-nn">
+      <!--inicializamos none. Son 4 divs dentros que son los colores que obtiene-->
+
+
+      <div class="preloader-wrapper big active">
+        <div class="spinner-layer spinner-blue">
+          <div class="circle-clipper left">
+            <div class="circle"></div>
+          </div>
+          <div class="gap-patch">
+            <div class="circle"></div>
+          </div>
+          <div class="circle-clipper right">
+            <div class="circle"></div>
+          </div>
+        </div>
+
+        <div class="spinner-layer spinner-red">
+          <div class="circle-clipper left">
+            <div class="circle"></div>
+          </div>
+          <div class="gap-patch">
+            <div class="circle"></div>
+          </div>
+          <div class="circle-clipper right">
+            <div class="circle"></div>
+          </div>
+        </div>
+
+        <div class="spinner-layer spinner-yellow">
+          <div class="circle-clipper left">
+            <div class="circle"></div>
+          </div>
+          <div class="gap-patch">
+            <div class="circle"></div>
+          </div>
+          <div class="circle-clipper right">
+            <div class="circle"></div>
+          </div>
+        </div>
+
+        <div class="spinner-layer spinner-green">
+          <div class="circle-clipper left">
+            <div class="circle"></div>
+          </div>
+          <div class="gap-patch">
+            <div class="circle"></div>
+          </div>
+          <div class="circle-clipper right">
+            <div class="circle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+
+
+    <p>Calcular parecido</p>
+
+    <p id="lblPorcentajeCoincidencia">Cargue las imagenes y haga click en comparar</p>
+    <br>
+    <div>
+      <p id="lblEsMismaPersona" class="ds-il"></p>
+      <p id="mismaPersona-rdoPos" class="ds-nn mismaPersona-rdoPos">SI
+      </p>
+      <p id="mismaPersona-rdoNeg" class="ds-nn mismaPersona-rdoNeg">NO</p>
+      <p id="lblcercania"></p>
+      <img src="./img-negativo-removebg.png" id="imgResultadoNeg" class="ds-nn imgResultado" />
+      <img src="./img-positivo-removebg.png" id="imgResultadoPos" class="ds-nn imgResultado " />
+      <div>
+
+        <button id="btnComparar" onclick="compararRostros()" disabled="true"
+          class="btnCargarImagen waves-effect waves-light btn ">
+          <i class="material-icons left">play_arrow</i>
+          Comparar
+        </button>
+
+        <button id="btnLimpiar" onclick="limpiar()" class="btnCargarImagen waves-effect waves-light btn ">
+          <i class="material-icons left">refresh</i>
+          Limpiar
+        </button>
+      </div>
+</body>
+
+</html>
