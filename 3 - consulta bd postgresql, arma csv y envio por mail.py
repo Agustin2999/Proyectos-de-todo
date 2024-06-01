@@ -1,6 +1,5 @@
 # -*- coding: cp1252 -*-
  
-import acceso_arcgis
 import postgresql_connection
 import datetime
 import time
